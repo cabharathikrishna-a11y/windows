@@ -119,8 +119,10 @@ jobs:
                 if ($foundCsc) { $cscPath = $foundCsc.FullName }
             }
             if (Test-Path $cscPath) {
-                Write-Host "Compiling Windows Web Installer EXE with $cscPath..."
-                & $cscPath /target:exe /out:"build/windows_dist/Life_OS_Installer.exe" /r:System.dll /r:System.Core.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/Installer.cs
+                $installerSource = "$PWD\tools\Installer.cs"
+                $installerOut = "$PWD\build\windows_dist\Life_OS_Installer.exe"
+                Write-Host "Compiling Windows Web Installer EXE ($installerSource) with $cscPath..."
+                & $cscPath /target:exe /out:"$installerOut" /r:System.dll /r:System.Core.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll "$installerSource"
                 if (Test-Path "build/windows_dist/Life_OS_Installer.exe") {
                     Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "build/windows_dist/Life_OS_Setup.exe" -Force
                     Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Installer.exe" -Force
