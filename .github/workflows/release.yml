@@ -121,7 +121,7 @@ jobs:
             Copy-Item $apkFile.FullName -Destination "Life_OS_Android.apk" -Force
         }
 
-        # Build C# App Launcher EXE (Life_OS.exe) and Installer EXE (Life_OS_Installer.exe)
+        # Build Standalone C# App Launcher EXE (Life_OS.exe)
         try {
             $cscPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
             if (-not (Test-Path $cscPath)) {
@@ -129,56 +129,31 @@ jobs:
                 if ($foundCsc) { $cscPath = $foundCsc.FullName }
             }
             if (Test-Path $cscPath) {
-                # 1. Compile Standalone Desktop App Launcher EXE
                 $appLauncherSource = "$PWD\tools\AppLauncher.cs"
-                $appLauncherOut = "$PWD\build\windows_dist\Life_OS.exe"
+                $appLauncherOut = "$PWD\Life_OS.exe"
                 if (Test-Path $appLauncherSource) {
+                    (Get-Content "$appLauncherSource") -replace "GH_REPO_PLACEHOLDER", "${{ github.repository }}" | Set-Content "$appLauncherSource"
                     Write-Host "Compiling Standalone Desktop App EXE ($appLauncherSource) with $cscPath..."
                     & $cscPath /target:winexe /out:"$appLauncherOut" /r:System.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll "$appLauncherSource"
-                    if (Test-Path "build/windows_dist/Life_OS.exe") {
-                        Copy-Item "build/windows_dist/Life_OS.exe" -Destination "Life_OS.exe" -Force
-                        Copy-Item "build/windows_dist/Life_OS.exe" -Destination "Life OS.exe" -Force
-                    }
-                }
-
-                # 2. Compile Web Downloader & Setup Installer EXE
-                $installerSource = "$PWD\tools\Installer.cs"
-                $installerOut = "$PWD\build\windows_dist\Life_OS_Installer.exe"
-                if (Test-Path $installerSource) {
-                    (Get-Content "$installerSource") -replace "GH_REPO_PLACEHOLDER", "${{ github.repository }}" | Set-Content "$installerSource"
-                    Write-Host "Compiling Windows Web Installer EXE ($installerSource) with $cscPath for repository ${{ github.repository }}..."
-                    & $cscPath /target:exe /out:"$installerOut" /r:System.dll /r:System.Core.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll "$installerSource"
-                    if (Test-Path "build/windows_dist/Life_OS_Installer.exe") {
-                        Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "build/windows_dist/Life_OS_Setup.exe" -Force
-                        Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Installer.exe" -Force
-                        Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Setup.exe" -Force
-                        Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life OS Setup.exe" -Force
-                    }
                 }
             }
         } catch {
-            Write-Host "C# Installer Compilation Note: $($_.Exception.Message)"
+            Write-Host "C# Launcher Compilation Note: $($_.Exception.Message)"
         }
 
-        # Launcher script supporting direct EXE execution or fallback JRE execution
-        Set-Content -Path "build/windows_dist/Life_OS_Windows_Launcher.cmd" -Value "@echo off`r`necho Starting Life OS for Windows...`r`nif exist `"%~dp0Life_OS.exe`" (`r`n    start `"`" `"%~dp0Life_OS.exe`" %*`r`n) else (`r`n    where javaw >nul 2>nul`r`n    if %errorlevel% equ 0 (`r`n        start /b `"`" javaw -jar `"%~dp0Life_OS_Desktop.jar`" %*`r`n    ) else (`r`n        where java >nul 2>nul`r`n        if %errorlevel% equ 0 (`r`n            start /b `"`" java -jar `"%~dp0Life_OS_Desktop.jar`" %*`r`n        ) else (`r`n            echo Java is not installed or not found in PATH.`r`n            echo Please run Life_OS.exe directly.`r`n            pause`r`n        )`r`n)`r`n)`r`n"
+        # Copy compiled Android APK
+        $apkFile = Get-ChildItem -Path "app/build/outputs/apk" -Filter "*.apk" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($apkFile) {
+            Copy-Item $apkFile.FullName -Destination "Life_OS.apk" -Force
+        }
 
-        Compress-Archive -Path "build/windows_dist/*" -DestinationPath "Life_OS_Windows.zip" -Force
-        Copy-Item "Life_OS_Windows.zip" "Life OS Windows.zip"
-
-    - name: Upload Windows Build Artifacts
+    - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-release-artifacts
+        name: release-artifacts
         path: |
-          Life_OS_Windows.zip
-          Life OS Windows.zip
           Life_OS.exe
-          Life OS.exe
-          Life_OS_Installer.exe
-          Life_OS_Setup.exe
-          Life OS Setup.exe
-          Life_OS_Android.apk
+          Life_OS.apk
         if-no-files-found: ignore
 
   publish_release:
@@ -190,29 +165,29 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
-    - name: Download Windows Artifacts
+    - name: Download Release Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: windows-release-artifacts
+        name: release-artifacts
         path: release_files
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ needs.build_windows.outputs.version_code }}
-        name: Release v1.0.${{ needs.build_windows.outputs.version_code }} (Windows Desktop)
+        name: Release v1.0.${{ needs.build_windows.outputs.version_code }} (Life OS App)
         draft: false
         make_latest: "true"
         body: |
-          Automated Windows Desktop build compiled successfully via GitHub Actions.
+          Life OS Standalone Application Release.
           
-          📦 **Windows Release Assets**:
-          - `Life_OS_Installer.exe` / `Life_OS_Setup.exe` (Web Downloader & Installer - Automatic setup from GitHub)
-          - `Life_OS.exe` (Standalone Windows Executable)
-          - `Life_OS_Windows.zip` (Complete Desktop Package Bundle)
+          📦 **Release Assets**:
+          - 💻 `Life_OS.exe` — Standalone Windows Desktop Application (Double-click to open)
+          - 📱 `Life_OS.apk` — Android Mobile Application
           
-          Tracking Identifier: Build #${{ github.run_number }} (Version Code: ${{ needs.build_windows.outputs.version_code }}, Version Name: ${{ needs.build_windows.outputs.version_name }})
+          Build Identifier: Version Code ${{ needs.build_windows.outputs.version_code }}
         files: |
-          release_files/*
+          release_files/Life_OS.exe
+          release_files/Life_OS.apk
 
 
 
