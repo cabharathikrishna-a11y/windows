@@ -337,12 +337,24 @@ namespace LifeOS.Installer
                     {
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = browserPath;
-                        psi.Arguments = "--app=" + appUrl;
-                        psi.UseShellExecute = false;
+                        psi.Arguments = string.Format("--new-window --app=\"{0}\"", appUrl);
+                        psi.UseShellExecute = true;
                         Process.Start(psi);
                         return;
                     }
-                    catch { }
+                    catch
+                    {
+                        try
+                        {
+                            ProcessStartInfo psi2 = new ProcessStartInfo();
+                            psi2.FileName = browserPath;
+                            psi2.Arguments = string.Format("--app=\"{0}\"", appUrl);
+                            psi2.UseShellExecute = false;
+                            Process.Start(psi2);
+                            return;
+                        }
+                        catch { }
+                    }
                 }
             }
 
