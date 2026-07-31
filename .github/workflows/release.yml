@@ -81,7 +81,37 @@ jobs:
         if (Test-Path "desktop/build/compose/binaries/main/zip") {
             Copy-Item "desktop/build/compose/binaries/main/zip/*" -Destination "build/windows_dist/" -Recurse -ErrorAction SilentlyContinue
         }
-        Set-Content -Path "build/windows_dist/Life_OS_Windows_Launcher.cmd" -Value "@echo off`r`necho Starting Life OS for Windows...`r`nstart /b javaw -jar Life_OS_Desktop.jar %*`r`n"
+        
+        # Locate compiled JAR file
+        $jarFiles = Get-ChildItem -Path "app/build", "build" -Filter "*.jar" -Recurse | Where-Object { $_.FullName -notmatch "unspecified" -and $_.Name -notmatch "javadoc" -and $_.Name -notmatch "sources" }
+        if ($jarFiles) {
+            $mainJar = $jarFiles[0]
+            Write-Host "Found compiled JAR artifact: $($mainJar.FullName)"
+            Copy-Item $mainJar.FullName -Destination "build/windows_dist/Life_OS_Desktop.jar" -Force
+
+            # Generate native Windows .exe standalone app image with bundled JRE via jpackage
+            try {
+                $jpackagePath = Join-Path $env:JAVA_HOME "bin\jpackage.exe"
+                if (Test-Path $jpackagePath) {
+                    Write-Host "Packaging standalone Windows .exe with jpackage tool..."
+                    & $jpackagePath --type app-image --name "Life_OS" --input "build/windows_dist" --main-jar "Life_OS_Desktop.jar" --dest "build/windows_dist/Life_OS_Exe"
+                    if (Test-Path "build/windows_dist/Life_OS_Exe/Life_OS") {
+                        Copy-Item "build/windows_dist/Life_OS_Exe/Life_OS/*" -Destination "build/windows_dist/" -Recurse -Force
+                    }
+                }
+            } catch {
+                Write-Host "jpackage build note: $($_.Exception.Message)"
+            }
+        }
+
+        # Launcher script supporting direct EXE execution or fallback JRE execution
+        Set-Content -Path "build/windows_dist/Life_OS_Windows_Launcher.cmd" -Value "@echo off`r`necho Starting Life OS for Windows...`r`nif exist `"%~dp0Life_OS.exe`" (`r`n    start `"`" `"%~dp0Life_OS.exe`" %*`r`n) else (`r`n    where javaw >nul 2>nul`r`n    if %errorlevel% equ 0 (`r`n        start /b `"`" javaw -jar `"%~dp0Life_OS_Desktop.jar`" %*`r`n    ) else (`r`n        where java >nul 2>nul`r`n        if %errorlevel% equ 0 (`r`n            start /b `"`" java -jar `"%~dp0Life_OS_Desktop.jar`" %*`r`n        ) else (`r`n            echo Java is not installed or not found in PATH.`r`n            echo Please install Java 17+ or run Life_OS.exe directly.`r`n            pause`r`n        )`r`n)`r`n)`r`n"
+
+        if (Test-Path "build/windows_dist/Life_OS.exe") {
+            Copy-Item "build/windows_dist/Life_OS.exe" -Destination "Life_OS.exe" -Force
+            Copy-Item "build/windows_dist/Life_OS.exe" -Destination "Life OS.exe" -Force
+        }
+
         Compress-Archive -Path "build/windows_dist/*" -DestinationPath "Life_OS_Windows.zip" -Force
         Copy-Item "Life_OS_Windows.zip" "Life OS Windows.zip"
 
@@ -92,6 +122,9 @@ jobs:
         path: |
           Life_OS_Windows.zip
           Life OS Windows.zip
+          Life_OS.exe
+          Life OS.exe
+        if-no-files-found: ignore
 
   publish_release:
     name: Generate Public GitHub Release
@@ -117,9 +150,9 @@ jobs:
         body: |
           Automated Windows Desktop build compiled successfully via GitHub Actions.
           
-          📦 **Windows Release Artifacts**:
-          - `Life_OS_Windows.zip`
-          - `Life OS Windows.zip`
+          📦 **Windows Release Assets**:
+          - `Life_OS.exe` (Standalone Windows Executable - No Java Required)
+          - `Life_OS_Windows.zip` (Complete Desktop Bundle)
           
           Tracking Identifier: Build #${{ github.run_number }} (Version Code: ${{ needs.build_windows.outputs.version_code }}, Version Name: ${{ needs.build_windows.outputs.version_name }})
         files: |
