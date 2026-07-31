@@ -82,26 +82,27 @@ jobs:
             Copy-Item "desktop/build/compose/binaries/main/zip/*" -Destination "build/windows_dist/" -Recurse -ErrorAction SilentlyContinue
         }
         
-        # Locate compiled JAR file
-        $jarFiles = Get-ChildItem -Path "app/build", "build" -Filter "*.jar" -Recurse | Where-Object { $_.FullName -notmatch "unspecified" -and $_.Name -notmatch "javadoc" -and $_.Name -notmatch "sources" }
-        if ($jarFiles) {
-            $mainJar = $jarFiles[0]
-            Write-Host "Found compiled JAR artifact: $($mainJar.FullName)"
-            Copy-Item $mainJar.FullName -Destination "build/windows_dist/Life_OS_Desktop.jar" -Force
+        # Package compiled Desktop bytecode into runnable JAR with Main-Class manifest
+        $jarTool = Join-Path $env:JAVA_HOME "bin\jar.exe"
+        $classDirs = Get-ChildItem -Path "app/build/tmp/kotlin-classes", "app/build/intermediates/javac" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "com" }
+        if ($classDirs) {
+            $parentDir = $classDirs[0].Parent.FullName
+            Write-Host "Creating runnable Desktop JAR from bytecode at $parentDir..."
+            & $jarTool --create --file "build/windows_dist/Life_OS_Desktop.jar" --main-class "com.example.desktop.MainKt" -C $parentDir .
+        }
 
-            # Generate native Windows .exe standalone app image with bundled JRE via jpackage
-            try {
-                $jpackagePath = Join-Path $env:JAVA_HOME "bin\jpackage.exe"
-                if (Test-Path $jpackagePath) {
-                    Write-Host "Packaging standalone Windows .exe with jpackage tool..."
-                    & $jpackagePath --type app-image --name "Life_OS" --input "build/windows_dist" --main-jar "Life_OS_Desktop.jar" --dest "build/windows_dist/Life_OS_Exe"
-                    if (Test-Path "build/windows_dist/Life_OS_Exe/Life_OS") {
-                        Copy-Item "build/windows_dist/Life_OS_Exe/Life_OS/*" -Destination "build/windows_dist/" -Recurse -Force
-                    }
+        # Generate native Windows .exe standalone app image with bundled JRE via jpackage
+        try {
+            $jpackagePath = Join-Path $env:JAVA_HOME "bin\jpackage.exe"
+            if (Test-Path $jpackagePath) {
+                Write-Host "Packaging standalone Windows .exe with jpackage tool..."
+                & $jpackagePath --type app-image --name "Life_OS" --input "build/windows_dist" --main-jar "Life_OS_Desktop.jar" --main-class "com.example.desktop.MainKt" --dest "build/windows_dist/Life_OS_Exe"
+                if (Test-Path "build/windows_dist/Life_OS_Exe/Life_OS") {
+                    Copy-Item "build/windows_dist/Life_OS_Exe/Life_OS/*" -Destination "build/windows_dist/" -Recurse -Force
                 }
-            } catch {
-                Write-Host "jpackage build note: $($_.Exception.Message)"
             }
+        } catch {
+            Write-Host "jpackage build note: $($_.Exception.Message)"
         }
 
         # Launcher script supporting direct EXE execution or fallback JRE execution
