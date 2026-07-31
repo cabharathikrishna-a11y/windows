@@ -313,49 +313,21 @@ namespace LifeOS.Installer
 
         private static void LaunchDirectBrowserAppMode(string appUrl)
         {
-            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
             string localAppDataDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string installDir = Path.Combine(localAppDataDir, "LifeOS");
+            string targetExe = Path.Combine(installDir, "Life_OS.exe");
 
-            string[] candidateBrowsers = new string[]
+            if (File.Exists(targetExe))
             {
-                Path.Combine(programFilesX86, @"Microsoft\Edge\Application\msedge.exe"),
-                Path.Combine(programFiles, @"Microsoft\Edge\Application\msedge.exe"),
-                @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-                @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-                Path.Combine(programFiles, @"Google\Chrome\Application\chrome.exe"),
-                Path.Combine(programFilesX86, @"Google\Chrome\Application\chrome.exe"),
-                Path.Combine(localAppDataDir, @"Google\Chrome\Application\chrome.exe"),
-                Path.Combine(localAppDataDir, @"Microsoft\Edge\Application\msedge.exe")
-            };
-
-            foreach (string browserPath in candidateBrowsers)
-            {
-                if (!string.IsNullOrEmpty(browserPath) && File.Exists(browserPath))
+                try
                 {
-                    try
-                    {
-                        ProcessStartInfo psi = new ProcessStartInfo();
-                        psi.FileName = browserPath;
-                        psi.Arguments = string.Format("--new-window --app=\"{0}\"", appUrl);
-                        psi.UseShellExecute = true;
-                        Process.Start(psi);
-                        return;
-                    }
-                    catch
-                    {
-                        try
-                        {
-                            ProcessStartInfo psi2 = new ProcessStartInfo();
-                            psi2.FileName = browserPath;
-                            psi2.Arguments = string.Format("--app=\"{0}\"", appUrl);
-                            psi2.UseShellExecute = false;
-                            Process.Start(psi2);
-                            return;
-                        }
-                        catch { }
-                    }
+                    ProcessStartInfo psi = new ProcessStartInfo(targetExe);
+                    psi.UseShellExecute = true;
+                    psi.WorkingDirectory = installDir;
+                    Process.Start(psi);
+                    return;
                 }
+                catch { }
             }
 
             try

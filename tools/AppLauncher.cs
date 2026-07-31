@@ -19,7 +19,7 @@ namespace LifeOS.Launcher
             }
             catch { }
 
-            // Set WebBrowser control registry emulation to IE11 mode for crisp local rendering fallback
+            // Enable IE11 rendering mode for WebBrowser control fallback in registry
             try
             {
                 string appName = Path.GetFileName(Process.GetCurrentProcess().MainModule.FileName);
@@ -35,6 +35,7 @@ namespace LifeOS.Launcher
 
             string appUrl = "https://ais-pre-wzrnxak24bqyxyrm3fnzxv-269590861741.asia-southeast1.run.app";
             string currentDir = AppDomain.CurrentDomain.BaseDirectory;
+            string localAppDataDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
             // Check for custom app_url.txt in current dir or local app data
             try
@@ -42,8 +43,7 @@ namespace LifeOS.Launcher
                 string urlFile = Path.Combine(currentDir, "app_url.txt");
                 if (!File.Exists(urlFile))
                 {
-                    string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                    urlFile = Path.Combine(localAppData, @"LifeOS\app_url.txt");
+                    urlFile = Path.Combine(localAppDataDir, @"LifeOS\app_url.txt");
                 }
 
                 if (File.Exists(urlFile))
@@ -57,93 +57,14 @@ namespace LifeOS.Launcher
             }
             catch { }
 
-            bool launched = false;
-
-            // Strategy 1: Open in standalone app window mode via Microsoft Edge, Google Chrome, or Brave
-            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            string localAppDataDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-
-            string[] candidateBrowsers = new string[]
+            // Run Native Windows Application Window directly
+            try
             {
-                Path.Combine(programFilesX86, @"Microsoft\Edge\Application\msedge.exe"),
-                Path.Combine(programFiles, @"Microsoft\Edge\Application\msedge.exe"),
-                @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-                @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-                Path.Combine(programFiles, @"Google\Chrome\Application\chrome.exe"),
-                Path.Combine(programFilesX86, @"Google\Chrome\Application\chrome.exe"),
-                Path.Combine(localAppDataDir, @"Google\Chrome\Application\chrome.exe"),
-                Path.Combine(localAppDataDir, @"Microsoft\Edge\Application\msedge.exe"),
-                Path.Combine(programFiles, @"BraveSoftware\Brave-Browser\Application\brave.exe"),
-                Path.Combine(programFilesX86, @"BraveSoftware\Brave-Browser\Application\brave.exe")
-            };
-
-            foreach (string browserPath in candidateBrowsers)
-            {
-                if (!string.IsNullOrEmpty(browserPath) && File.Exists(browserPath))
-                {
-                    // Try UseShellExecute = false first
-                    try
-                    {
-                        ProcessStartInfo psi = new ProcessStartInfo();
-                        psi.FileName = browserPath;
-                        psi.Arguments = string.Format("--new-window --app=\"{0}\"", appUrl);
-                        psi.UseShellExecute = false;
-                        Process proc = Process.Start(psi);
-                        if (proc != null)
-                        {
-                            launched = true;
-                            break;
-                        }
-                    }
-                    catch { }
-
-                    // Try UseShellExecute = true
-                    try
-                    {
-                        ProcessStartInfo psi = new ProcessStartInfo();
-                        psi.FileName = browserPath;
-                        psi.Arguments = string.Format("--app=\"{0}\"", appUrl);
-                        psi.UseShellExecute = true;
-                        Process proc = Process.Start(psi);
-                        if (proc != null)
-                        {
-                            launched = true;
-                            break;
-                        }
-                    }
-                    catch { }
-                }
+                Application.Run(new LifeOSForm(appUrl));
             }
-
-            // Strategy 2: Launch via system default web browser
-            if (!launched)
+            catch (Exception ex)
             {
-                try
-                {
-                    ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = appUrl;
-                    psi.UseShellExecute = true;
-                    Process proc = Process.Start(psi);
-                    if (proc != null)
-                    {
-                        launched = true;
-                    }
-                }
-                catch { }
-            }
-
-            // Strategy 3: Guaranteed native Windows Application Form window fallback
-            if (!launched)
-            {
-                try
-                {
-                    Application.Run(new LifeOSForm(appUrl));
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Life OS Desktop Application Launcher\n\nCould not open browser window:\n" + ex.Message + "\n\nOpening Application URL:\n" + appUrl, "Life OS Desktop", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
+                MessageBox.Show("Life OS Desktop Application\n\nError initializing native window:\n" + ex.Message + "\n\nApplication URL:\n" + appUrl, "Life OS Desktop", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
     }
@@ -189,7 +110,7 @@ namespace LifeOS.Launcher
             btnHome.Click += (s, e) => { if (browser != null) browser.Navigate(currentUrl); };
 
             Label lblTitle = new Label();
-            lblTitle.Text = "Life OS Desktop Application";
+            lblTitle.Text = "Life OS Native Desktop Application";
             lblTitle.ForeColor = Color.FromArgb(0, 230, 153);
             lblTitle.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
             lblTitle.AutoSize = true;
@@ -199,7 +120,7 @@ namespace LifeOS.Launcher
             topBar.Controls.Add(btnHome);
             topBar.Controls.Add(lblTitle);
 
-            // Create Web Browser Control
+            // Create Embedded Web Browser Control
             browser = new WebBrowser();
             browser.Dock = DockStyle.Fill;
             browser.ScriptErrorsSuppressed = true;
