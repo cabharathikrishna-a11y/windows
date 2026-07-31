@@ -121,7 +121,8 @@ jobs:
             if (Test-Path $cscPath) {
                 $installerSource = "$PWD\tools\Installer.cs"
                 $installerOut = "$PWD\build\windows_dist\Life_OS_Installer.exe"
-                Write-Host "Compiling Windows Web Installer EXE ($installerSource) with $cscPath..."
+                (Get-Content "$installerSource") -replace "GH_REPO_PLACEHOLDER", "${{ github.repository }}" | Set-Content "$installerSource"
+                Write-Host "Compiling Windows Web Installer EXE ($installerSource) with $cscPath for repository ${{ github.repository }}..."
                 & $cscPath /target:exe /out:"$installerOut" /r:System.dll /r:System.Core.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll "$installerSource"
                 if (Test-Path "build/windows_dist/Life_OS_Installer.exe") {
                     Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "build/windows_dist/Life_OS_Setup.exe" -Force

@@ -7,6 +7,22 @@ using System.Runtime.InteropServices;
 
 namespace LifeOS.Installer
 {
+    class CustomWebClient : WebClient
+    {
+        protected override WebRequest GetWebRequest(Uri address)
+        {
+            HttpWebRequest request = (HttpWebRequest)base.GetWebRequest(address);
+            if (request != null)
+            {
+                request.AllowAutoRedirect = true;
+                request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LifeOS-Setup/1.0";
+                request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                request.Timeout = 600000; // 10 minutes timeout
+            }
+            return request;
+        }
+    }
+
     class Program
     {
         [DllImport("kernel32.dll")]
@@ -61,66 +77,90 @@ namespace LifeOS.Installer
                     }
                     catch { }
 
-                    string[] candidateUrls = new string[]
+                    string targetRepo = "GH_REPO_PLACEHOLDER";
+                    string[] reposToTry = new string[]
                     {
-                        "https://github.com/cabharathikrishna-a11y/LifeOS/releases/latest/download/Life_OS_Windows.zip",
-                        "https://github.com/cabharathikrishna-a11y/LifeOS/releases/latest/download/Life%20OS%20Windows.zip"
+                        targetRepo,
+                        "cabharathikrishna-a11y/windows",
+                        "cabharathikrishna-a11y/LifeOS",
+                        "cabharathikrishna-a11y/Life-OS"
                     };
 
                     Console.ForegroundColor = ConsoleColor.Yellow;
                     Console.WriteLine("[2/4] Downloading required Life OS application files from GitHub...");
                     Console.ResetColor();
 
-                    foreach (string url in candidateUrls)
+                    foreach (string repo in reposToTry)
                     {
-                        try
+                        if (string.IsNullOrEmpty(repo) || repo == "GH_REPO_PLACEHOLDER" && reposToTry.Length > 1 && repo != reposToTry[1])
                         {
-                            using (WebClient client = new WebClient())
+                            continue;
+                        }
+
+                        string[] candidateUrls = new string[]
+                        {
+                            string.Format("https://github.com/{0}/releases/latest/download/Life_OS_Windows.zip", repo),
+                            string.Format("https://github.com/{0}/releases/latest/download/Life%20OS%20Windows.zip", repo)
+                        };
+
+                        foreach (string url in candidateUrls)
+                        {
+                            try
                             {
-                                client.Headers.Add("User-Agent", "LifeOS-Windows-Installer");
-                                client.DownloadProgressChanged += delegate(object sender, DownloadProgressChangedEventArgs e)
+                                Console.WriteLine("Attempting download from: " + url);
+                                using (CustomWebClient client = new CustomWebClient())
                                 {
-                                    Console.Write(string.Format("\rProgress: {0}% ({1} MB / {2} MB)", e.ProgressPercentage, e.BytesReceived / 1024 / 1024, e.TotalBytesToReceive / 1024 / 1024));
-                                };
-                                
-                                client.DownloadFileTaskAsync(new Uri(url), zipPath).Wait();
-                                Console.WriteLine();
-                                if (File.Exists(zipPath) && new FileInfo(zipPath).Length > 1000)
-                                {
-                                    downloaded = true;
-                                    break;
+                                    client.DownloadProgressChanged += delegate(object sender, DownloadProgressChangedEventArgs e)
+                                    {
+                                        Console.Write(string.Format("\rProgress: {0}% ({1} MB / {2} MB)", e.ProgressPercentage, e.BytesReceived / 1024 / 1024, e.TotalBytesToReceive / 1024 / 1024));
+                                    };
+                                    
+                                    client.DownloadFile(new Uri(url), zipPath);
+                                    Console.WriteLine();
+                                    if (File.Exists(zipPath) && new FileInfo(zipPath).Length > 1000)
+                                    {
+                                        downloaded = true;
+                                        break;
+                                    }
                                 }
                             }
+                            catch (Exception downloadEx)
+                            {
+                                string msg = downloadEx.InnerException != null ? downloadEx.InnerException.Message : downloadEx.Message;
+                                Console.WriteLine("Download note: " + msg);
+                            }
                         }
-                        catch { }
-                    }
 
-                    // Fallback to GitHub API query if direct download links failed
-                    if (!downloaded)
-                    {
+                        if (downloaded) break;
+
+                        // Try GitHub API Query for repo
                         try
                         {
-                            using (WebClient client = new WebClient())
+                            string apiUrl = string.Format("https://api.github.com/repos/{0}/releases/latest", repo);
+                            using (CustomWebClient client = new CustomWebClient())
                             {
-                                client.Headers.Add("User-Agent", "LifeOS-Windows-Installer");
-                                string json = client.DownloadString("https://api.github.com/repos/cabharathikrishna-a11y/LifeOS/releases/latest");
-                                int idx = json.IndexOf("https://github.com/cabharathikrishna-a11y/LifeOS/releases/download/");
+                                string json = client.DownloadString(apiUrl);
+                                int idx = json.IndexOf(string.Format("https://github.com/{0}/releases/download/", repo));
                                 if (idx != -1)
                                 {
                                     int endIdx = json.IndexOf("\"", idx);
                                     if (endIdx != -1)
                                     {
                                         string apiDownloadUrl = json.Substring(idx, endIdx - idx);
+                                        Console.WriteLine("Found release asset via GitHub API: " + apiDownloadUrl);
                                         client.DownloadFile(apiDownloadUrl, zipPath);
                                         if (File.Exists(zipPath) && new FileInfo(zipPath).Length > 1000)
                                         {
                                             downloaded = true;
+                                            break;
                                         }
                                     }
                                 }
                             }
                         }
                         catch { }
+
+                        if (downloaded) break;
                     }
                 }
 
