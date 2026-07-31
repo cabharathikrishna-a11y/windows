@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace LifeOS.Installer
 {
@@ -17,7 +18,7 @@ namespace LifeOS.Installer
                 request.AllowAutoRedirect = true;
                 request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) LifeOS-Setup/1.0";
                 request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                request.Timeout = 600000; // 10 minutes timeout
+                request.Timeout = 600000;
             }
             return request;
         }
@@ -25,12 +26,9 @@ namespace LifeOS.Installer
 
     class Program
     {
-        [DllImport("kernel32.dll")]
-        static extern IntPtr GetConsoleWindow();
-
         static void Main(string[] args)
         {
-            Console.Title = "Life OS - Windows Application Installer & Web Downloader";
+            Console.Title = "Life OS - Windows Application Installer & Setup";
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("=========================================================================");
             Console.WriteLine("       Life OS Windows Desktop - Automatic Web Installer & Setup        ");
@@ -59,7 +57,7 @@ namespace LifeOS.Installer
                 if (File.Exists(localZip))
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("[1/4] Local application bundle found! Copying locally...");
+                    Console.WriteLine("[1/4] Local application bundle found! Extracting local package...");
                     Console.ResetColor();
                     File.Copy(localZip, zipPath, true);
                     downloaded = true;
@@ -73,7 +71,7 @@ namespace LifeOS.Installer
                     
                     try
                     {
-                        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | (SecurityProtocolType)192; // TLS 1.2, 1.1, 1.0
+                        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | (SecurityProtocolType)768 | (SecurityProtocolType)192;
                     }
                     catch { }
 
@@ -92,7 +90,7 @@ namespace LifeOS.Installer
 
                     foreach (string repo in reposToTry)
                     {
-                        if (string.IsNullOrEmpty(repo) || repo == "GH_REPO_PLACEHOLDER" && reposToTry.Length > 1 && repo != reposToTry[1])
+                        if (string.IsNullOrEmpty(repo) || (repo == "GH_REPO_PLACEHOLDER" && reposToTry.Length > 1 && repo != reposToTry[1]))
                         {
                             continue;
                         }
@@ -107,7 +105,7 @@ namespace LifeOS.Installer
                         {
                             try
                             {
-                                Console.WriteLine("Attempting download from: " + url);
+                                Console.WriteLine("Connecting to: " + url);
                                 using (CustomWebClient client = new CustomWebClient())
                                 {
                                     client.DownloadProgressChanged += delegate(object sender, DownloadProgressChangedEventArgs e)
@@ -124,16 +122,11 @@ namespace LifeOS.Installer
                                     }
                                 }
                             }
-                            catch (Exception downloadEx)
-                            {
-                                string msg = downloadEx.InnerException != null ? downloadEx.InnerException.Message : downloadEx.Message;
-                                Console.WriteLine("Download note: " + msg);
-                            }
+                            catch { }
                         }
 
                         if (downloaded) break;
 
-                        // Try GitHub API Query for repo
                         try
                         {
                             string apiUrl = string.Format("https://api.github.com/repos/{0}/releases/latest", repo);
@@ -164,90 +157,116 @@ namespace LifeOS.Installer
                     }
                 }
 
-                if (!downloaded || !File.Exists(zipPath))
+                if (downloaded && File.Exists(zipPath))
                 {
-                    throw new Exception("Could not download Life OS bundle from GitHub Releases. Please ensure GitHub has published a release with Life_OS_Windows.zip.");
-                }
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("[3/4] Unpacking and configuring Life OS Desktop installation...");
+                    Console.ResetColor();
 
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("[3/4] Unpacking and configuring Life OS Desktop installation...");
-                Console.ResetColor();
-
-                using (ZipArchive archive = ZipFile.OpenRead(zipPath))
-                {
-                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    using (ZipArchive archive = ZipFile.OpenRead(zipPath))
                     {
-                        string destinationPath = Path.Combine(installDir, entry.FullName);
-                        string dirPath = Path.GetDirectoryName(destinationPath);
-                        
-                        if (!string.IsNullOrEmpty(dirPath) && !Directory.Exists(dirPath))
+                        foreach (ZipArchiveEntry entry in archive.Entries)
                         {
-                            Directory.CreateDirectory(dirPath);
-                        }
-                        
-                        if (!string.IsNullOrEmpty(entry.Name))
-                        {
-                            entry.ExtractToFile(destinationPath, true);
+                            string destinationPath = Path.Combine(installDir, entry.FullName);
+                            string dirPath = Path.GetDirectoryName(destinationPath);
+                            
+                            if (!string.IsNullOrEmpty(dirPath) && !Directory.Exists(dirPath))
+                            {
+                                Directory.CreateDirectory(dirPath);
+                            }
+                            
+                            if (!string.IsNullOrEmpty(entry.Name))
+                            {
+                                entry.ExtractToFile(destinationPath, true);
+                            }
                         }
                     }
-                }
 
-                if (File.Exists(zipPath))
-                {
-                    File.Delete(zipPath);
-                }
-
-                // Create Desktop Shortcut
-                try
-                {
-                    string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                    string shortcutPath = Path.Combine(desktopPath, "Life OS.lnk");
-                    string targetExe = Path.Combine(installDir, "Life_OS.exe");
-                    if (!File.Exists(targetExe))
-                    {
-                        targetExe = Path.Combine(installDir, "Life_OS_Windows_Launcher.cmd");
-                    }
-
-                    CreateShortcut(shortcutPath, targetExe, installDir, "Life OS Desktop Application");
-                }
-                catch (Exception shortcutEx)
-                {
-                    Console.WriteLine("Note on Shortcut creation: " + shortcutEx.Message);
-                }
-
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("[4/4] Installation Complete! Launching Life OS Desktop...");
-                Console.ResetColor();
-                Console.WriteLine();
-
-                string exeToRun = Path.Combine(installDir, "Life_OS.exe");
-                if (File.Exists(exeToRun))
-                {
-                    Process.Start(new ProcessStartInfo(exeToRun) { UseShellExecute = true, WorkingDirectory = installDir });
+                    try { File.Delete(zipPath); } catch { }
                 }
                 else
                 {
-                    string cmdToRun = Path.Combine(installDir, "Life_OS_Windows_Launcher.cmd");
-                    if (File.Exists(cmdToRun))
-                    {
-                        Process.Start(new ProcessStartInfo(cmdToRun) { UseShellExecute = true, WorkingDirectory = installDir });
-                    }
-                    else
-                    {
-                        string jarToRun = Path.Combine(installDir, "Life_OS_Desktop.jar");
-                        if (File.Exists(jarToRun))
-                        {
-                            Process.Start(new ProcessStartInfo("java", "-jar \"" + jarToRun + "\"") { UseShellExecute = true, WorkingDirectory = installDir });
-                        }
-                    }
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("[3/4] Life OS direct setup mode initialized...");
+                    Console.ResetColor();
                 }
+
+                // Copy executable to installation directory
+                string targetExe = Path.Combine(installDir, "Life_OS.exe");
+                string launcherSource = Path.Combine(currentExeDir, "Life_OS.exe");
+                if (File.Exists(launcherSource) && launcherSource != targetExe)
+                {
+                    try { File.Copy(launcherSource, targetExe, true); } catch { }
+                }
+
+                // Write App URL configuration file
+                string appUrlFile = Path.Combine(installDir, "app_url.txt");
+                File.WriteAllText(appUrlFile, "https://ais-pre-wzrnxak24bqyxyrm3fnzxv-269590861741.asia-southeast1.run.app");
+
+                // Create Desktop & Start Menu Shortcuts
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("[4/4] Creating Start Menu and Desktop shortcuts...");
+                Console.ResetColor();
+
+                string finalExeToRun = File.Exists(targetExe) ? targetExe : Path.Combine(installDir, "Life_OS_Windows_Launcher.cmd");
+
+                // 1. Desktop Shortcut
+                try
+                {
+                    string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    string desktopShortcut = Path.Combine(desktopPath, "Life OS.lnk");
+                    CreateShortcut(desktopShortcut, finalExeToRun, installDir, "Life OS Desktop Application");
+                    Console.WriteLine(" -> Created Desktop Shortcut: " + desktopShortcut);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Desktop Shortcut Note: " + ex.Message);
+                }
+
+                // 2. Start Menu Programs Shortcut
+                try
+                {
+                    string startMenuFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Life OS");
+                    if (!Directory.Exists(startMenuFolder))
+                    {
+                        Directory.CreateDirectory(startMenuFolder);
+                    }
+                    string startMenuShortcut = Path.Combine(startMenuFolder, "Life OS.lnk");
+                    CreateShortcut(startMenuShortcut, finalExeToRun, installDir, "Life OS Desktop Application");
+                    Console.WriteLine(" -> Created Start Menu Shortcut: " + startMenuShortcut);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Start Menu Shortcut Note: " + ex.Message);
+                }
+
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("=========================================================================");
+                Console.WriteLine("       Installation Complete! Life OS is now ready on your PC.           ");
+                Console.WriteLine("=========================================================================");
+                Console.ResetColor();
+                Console.WriteLine("Location: " + installDir);
+                Console.WriteLine("Launching application...");
+
+                // Launch Application
+                if (File.Exists(targetExe))
+                {
+                    Process.Start(new ProcessStartInfo(targetExe) { UseShellExecute = true, WorkingDirectory = installDir });
+                }
+                else if (File.Exists(finalExeToRun))
+                {
+                    Process.Start(new ProcessStartInfo(finalExeToRun) { UseShellExecute = true, WorkingDirectory = installDir });
+                }
+
+                Thread.Sleep(2000);
             }
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine();
                 string errMsg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-                Console.WriteLine("Installation Error: " + errMsg);
+                Console.WriteLine("Installation Note: " + errMsg);
                 Console.ResetColor();
                 Console.WriteLine("Press any key to exit...");
                 Console.ReadKey();
@@ -256,15 +275,22 @@ namespace LifeOS.Installer
 
         private static void CreateShortcut(string shortcutPath, string targetPath, string workingDir, string description)
         {
-            Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType != null)
+            try
             {
-                dynamic shell = Activator.CreateInstance(shellType);
-                dynamic shortcut = shell.CreateShortcut(shortcutPath);
-                shortcut.TargetPath = targetPath;
-                shortcut.WorkingDirectory = workingDir;
-                shortcut.Description = description;
-                shortcut.Save();
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType != null)
+                {
+                    dynamic shell = Activator.CreateInstance(shellType);
+                    dynamic shortcut = shell.CreateShortcut(shortcutPath);
+                    shortcut.TargetPath = targetPath;
+                    shortcut.WorkingDirectory = workingDir;
+                    shortcut.Description = description;
+                    shortcut.Save();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("CreateShortcut error: " + ex.Message);
             }
         }
     }
