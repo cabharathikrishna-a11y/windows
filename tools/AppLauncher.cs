@@ -19,7 +19,7 @@ namespace LifeOS.Launcher
             }
             catch { }
 
-            // Set WebBrowser control to use IE11 rendering engine mode in registry for local user
+            // Set WebBrowser control registry emulation to IE11 mode for crisp local rendering fallback
             try
             {
                 string appName = Path.GetFileName(Process.GetCurrentProcess().MainModule.FileName);
@@ -36,17 +36,17 @@ namespace LifeOS.Launcher
             string appUrl = "https://ais-pre-wzrnxak24bqyxyrm3fnzxv-269590861741.asia-southeast1.run.app";
             string currentDir = AppDomain.CurrentDomain.BaseDirectory;
 
-            // Check for custom app_url.txt
-            string urlFile = Path.Combine(currentDir, "app_url.txt");
-            if (!File.Exists(urlFile))
+            // Check for custom app_url.txt in current dir or local app data
+            try
             {
-                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                urlFile = Path.Combine(localAppData, "LifeOS\\app_url.txt");
-            }
+                string urlFile = Path.Combine(currentDir, "app_url.txt");
+                if (!File.Exists(urlFile))
+                {
+                    string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    urlFile = Path.Combine(localAppData, @"LifeOS\app_url.txt");
+                }
 
-            if (File.Exists(urlFile))
-            {
-                try
+                if (File.Exists(urlFile))
                 {
                     string fileUrl = File.ReadAllText(urlFile).Trim();
                     if (!string.IsNullOrEmpty(fileUrl) && fileUrl.StartsWith("http"))
@@ -54,10 +54,12 @@ namespace LifeOS.Launcher
                         appUrl = fileUrl;
                     }
                 }
-                catch { }
             }
+            catch { }
 
-            // Attempt 1: Try launching as standalone Frameless Desktop App via Edge / Chrome
+            bool launched = false;
+
+            // Strategy 1: Open in standalone app window mode via Microsoft Edge, Google Chrome, or Brave
             string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
             string localAppDataDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -76,59 +78,72 @@ namespace LifeOS.Launcher
                 Path.Combine(programFilesX86, @"BraveSoftware\Brave-Browser\Application\brave.exe")
             };
 
-            bool standaloneLaunched = false;
-
             foreach (string browserPath in candidateBrowsers)
             {
                 if (!string.IsNullOrEmpty(browserPath) && File.Exists(browserPath))
                 {
+                    // Try UseShellExecute = false first
                     try
                     {
                         ProcessStartInfo psi = new ProcessStartInfo();
                         psi.FileName = browserPath;
                         psi.Arguments = string.Format("--new-window --app=\"{0}\"", appUrl);
+                        psi.UseShellExecute = false;
+                        Process proc = Process.Start(psi);
+                        if (proc != null)
+                        {
+                            launched = true;
+                            break;
+                        }
+                    }
+                    catch { }
+
+                    // Try UseShellExecute = true
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = browserPath;
+                        psi.Arguments = string.Format("--app=\"{0}\"", appUrl);
                         psi.UseShellExecute = true;
                         Process proc = Process.Start(psi);
                         if (proc != null)
                         {
-                            standaloneLaunched = true;
+                            launched = true;
                             break;
                         }
                     }
-                    catch
-                    {
-                        try
-                        {
-                            ProcessStartInfo psi2 = new ProcessStartInfo();
-                            psi2.FileName = browserPath;
-                            psi2.Arguments = string.Format("--app=\"{0}\"", appUrl);
-                            psi2.UseShellExecute = false;
-                            Process proc = Process.Start(psi2);
-                            if (proc != null)
-                            {
-                                standaloneLaunched = true;
-                                break;
-                            }
-                        }
-                        catch { }
-                    }
+                    catch { }
                 }
             }
 
-            // Attempt 2: If standalone browser launch succeeded, keep a lightweight system tray or exit cleanly
-            // If standalone launch failed or browser was not found, run native WinForms Application Form directly!
-            if (!standaloneLaunched)
+            // Strategy 2: Launch via system default web browser
+            if (!launched)
             {
                 try
                 {
                     ProcessStartInfo psi = new ProcessStartInfo();
                     psi.FileName = appUrl;
                     psi.UseShellExecute = true;
-                    Process.Start(psi);
+                    Process proc = Process.Start(psi);
+                    if (proc != null)
+                    {
+                        launched = true;
+                    }
                 }
                 catch { }
+            }
 
-                Application.Run(new LifeOSForm(appUrl));
+            // Strategy 3: Guaranteed native Windows Application Form window fallback
+            if (!launched)
+            {
+                try
+                {
+                    Application.Run(new LifeOSForm(appUrl));
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Life OS Desktop Application Launcher\n\nCould not open browser window:\n" + ex.Message + "\n\nOpening Application URL:\n" + appUrl, "Life OS Desktop", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             }
         }
     }

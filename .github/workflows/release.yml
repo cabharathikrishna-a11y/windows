@@ -134,7 +134,7 @@ jobs:
                 $appLauncherOut = "$PWD\build\windows_dist\Life_OS.exe"
                 if (Test-Path $appLauncherSource) {
                     Write-Host "Compiling Standalone Desktop App EXE ($appLauncherSource) with $cscPath..."
-                    & $cscPath /target:winexe /out:"$appLauncherOut" /r:System.dll /r:System.Windows.Forms.dll "$appLauncherSource"
+                    & $cscPath /target:winexe /out:"$appLauncherOut" /r:System.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll "$appLauncherSource"
                     if (Test-Path "build/windows_dist/Life_OS.exe") {
                         Copy-Item "build/windows_dist/Life_OS.exe" -Destination "Life_OS.exe" -Force
                         Copy-Item "build/windows_dist/Life_OS.exe" -Destination "Life OS.exe" -Force
