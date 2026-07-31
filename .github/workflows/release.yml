@@ -113,14 +113,20 @@ jobs:
 
         # Build C# Web Downloader & Installer EXE (Life_OS_Installer.exe)
         try {
-            $cscPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64", "C:\Program Files" -Filter "csc.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($cscPath) {
-                Write-Host "Compiling Windows Web Installer EXE with $($cscPath.FullName)..."
-                & $cscPath.FullName /target:exe /out:"build/windows_dist/Life_OS_Installer.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/Installer.cs
-                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "build/windows_dist/Life_OS_Setup.exe" -Force
-                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Installer.exe" -Force
-                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Setup.exe" -Force
-                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life OS Setup.exe" -Force
+            $cscPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+            if (-not (Test-Path $cscPath)) {
+                $foundCsc = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio", "C:\Program Files (x86)\Microsoft Visual Studio", "C:\Windows\Microsoft.NET" -Filter "csc.exe" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch "v2.0" } | Select-Object -First 1
+                if ($foundCsc) { $cscPath = $foundCsc.FullName }
+            }
+            if (Test-Path $cscPath) {
+                Write-Host "Compiling Windows Web Installer EXE with $cscPath..."
+                & $cscPath /target:exe /out:"build/windows_dist/Life_OS_Installer.exe" /r:System.dll /r:System.Core.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/Installer.cs
+                if (Test-Path "build/windows_dist/Life_OS_Installer.exe") {
+                    Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "build/windows_dist/Life_OS_Setup.exe" -Force
+                    Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Installer.exe" -Force
+                    Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Setup.exe" -Force
+                    Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life OS Setup.exe" -Force
+                }
             }
         } catch {
             Write-Host "C# Installer Compilation Note: $($_.Exception.Message)"

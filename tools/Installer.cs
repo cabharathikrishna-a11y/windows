@@ -48,9 +48,9 @@ namespace LifeOS.Installer
                     Console.WriteLine("[2/4] Downloading required Life OS application files from GitHub...");
                     Console.ResetColor();
                     
-                    client.DownloadProgressChanged += (sender, e) =>
+                    client.DownloadProgressChanged += delegate(object sender, DownloadProgressChangedEventArgs e)
                     {
-                        Console.Write($"\rProgress: {e.ProgressPercentage}% ({e.BytesReceived / 1024 / 1024} MB / {e.TotalBytesToReceive / 1024 / 1024} MB)");
+                        Console.Write(string.Format("\rProgress: {0}% ({1} MB / {2} MB)", e.ProgressPercentage, e.BytesReceived / 1024 / 1024, e.TotalBytesToReceive / 1024 / 1024));
                     };
                     
                     client.DownloadFileTaskAsync(new Uri(downloadUrl), zipPath).Wait();
