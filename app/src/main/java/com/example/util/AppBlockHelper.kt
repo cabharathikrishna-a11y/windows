@@ -39,6 +39,7 @@ object AppBlockHelper {
     @Volatile private var cachedIgFeedScrollLimit = false
     @Volatile private var cachedIgReelsMuteAudio = true
     @Volatile private var cachedIgReelsLimitMinutes = 0
+    @Volatile private var cachedIgRedirectToLifeOs = true
 
     // YouTube selective blocking cache
     @Volatile private var cachedYtUseSelective = true
@@ -88,6 +89,7 @@ object AppBlockHelper {
         cachedIgFeedScrollLimit = igPrefs.getBoolean("ig_feed_scroll_limit", false)
         cachedIgReelsMuteAudio = igPrefs.getBoolean("ig_reels_mute_audio", true)
         cachedIgReelsLimitMinutes = igPrefs.getInt("ig_reels_limit_minutes", 0)
+        cachedIgRedirectToLifeOs = igPrefs.getBoolean("ig_redirect_to_lifeos_insta", true)
 
         // Load YouTube prefs
         val ytPrefs = appContext.getSharedPreferences("youtube_blocker_prefs", Context.MODE_PRIVATE)
@@ -143,6 +145,7 @@ object AppBlockHelper {
                 "ig_feed_scroll_limit" -> cachedIgFeedScrollLimit = igPrefs.getBoolean("ig_feed_scroll_limit", false)
                 "ig_reels_mute_audio" -> cachedIgReelsMuteAudio = igPrefs.getBoolean("ig_reels_mute_audio", true)
                 "ig_reels_limit_minutes" -> cachedIgReelsLimitMinutes = igPrefs.getInt("ig_reels_limit_minutes", 0)
+                "ig_redirect_to_lifeos_insta" -> cachedIgRedirectToLifeOs = igPrefs.getBoolean("ig_redirect_to_lifeos_insta", true)
             }
         }
 
@@ -863,6 +866,18 @@ object AppBlockHelper {
     fun setIgReelsLimitMinutes(context: Context, minutes: Int) {
         getInstagramPrefs(context).edit().putInt("ig_reels_limit_minutes", minutes).apply()
         cachedIgReelsLimitMinutes = minutes
+    }
+
+    fun isIgRedirectToLifeOsEnabled(context: Context): Boolean {
+        if (!isCacheInitialized) initializeCache(context)
+        val appPrefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val isWebAppEnabled = appPrefs.getBoolean("instagram_web_app_enabled", true)
+        return cachedIgRedirectToLifeOs && isWebAppEnabled
+    }
+
+    fun setIgRedirectToLifeOsEnabled(context: Context, enabled: Boolean) {
+        getInstagramPrefs(context).edit().putBoolean("ig_redirect_to_lifeos_insta", enabled).apply()
+        cachedIgRedirectToLifeOs = enabled
     }
 
     // YouTube Advanced Blocker Helpers

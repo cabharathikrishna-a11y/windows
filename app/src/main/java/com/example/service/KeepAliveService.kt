@@ -46,6 +46,7 @@ class KeepAliveService : Service() {
     private var databaseAlignmentCheckJob: Job? = null
     private var lastKnownForegroundPackage: String? = null
     private var wasUsingInstaOnBreak = false
+    private var lastIgRedirectTimeInService = 0L
     private val lastFocusStatusMap = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     private val latestFetchedPeerStates = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     private val debounceJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
@@ -556,6 +557,27 @@ class KeepAliveService : Service() {
                     prevPackage = foregroundPackage
 
                     if (foregroundPackage == packageName) continue
+
+                    // Check if user has official Instagram open and Instagram diversion feature is active
+                    if (foregroundPackage == "com.instagram.android" && com.example.util.AppBlockHelper.isIgRedirectToLifeOsEnabled(applicationContext)) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastIgRedirectTimeInService > 3000) {
+                            lastIgRedirectTimeInService = now
+                            Log.w("KeepAliveService", "Official Instagram app in foreground! Redirecting to Life OS AntiGram...")
+                            launch(Dispatchers.Main) {
+                                Toast.makeText(applicationContext, "Diverting Official Instagram to Life OS AntiGram... 📱✨", Toast.LENGTH_SHORT).show()
+                            }
+                            val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)?.apply {
+                                putExtra("OPEN_INSTAGRAM_WEB_APP", true)
+                                putExtra("NAVIGATE_TO", "INSTAGRAM_WEB_APP")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            }
+                            if (launchIntent != null) {
+                                startActivity(launchIntent)
+                            }
+                            continue
+                        }
+                    }
 
                     val isBreakActive = !FocusTimerManager.isFocusPhase.value
 

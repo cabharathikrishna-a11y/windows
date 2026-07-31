@@ -3093,6 +3093,7 @@ fun AppBlocksSettingsSection() {
 
         // Instagram Advanced Blocker Settings Card
         var useSelectiveIg by remember { mutableStateOf(AppBlockHelper.isIgSelectiveBlockingEnabled(context)) }
+        var isIgRedirectEnabled by remember { mutableStateOf(AppBlockHelper.isIgRedirectToLifeOsEnabled(context)) }
         var isIgReelsBlocked by remember { mutableStateOf(AppBlockHelper.isIgReelsBlocked(context)) }
         var isIgStoriesBlocked by remember { mutableStateOf(AppBlockHelper.isIgStoriesBlocked(context)) }
         var isIgExploreBlocked by remember { mutableStateOf(AppBlockHelper.isIgExploreBlocked(context)) }
@@ -3174,6 +3175,34 @@ fun AppBlocksSettingsSection() {
                             color = Color.Gray
                         )
                     }
+                }
+
+                HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.4f))
+
+                // 0. Auto-Redirect Official Instagram App to Life OS AntiGram
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text("Auto-Redirect Official Instagram", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("When official Instagram is opened, automatically close it immediately and launch Life OS AntiGram.", color = Color.LightGray, fontSize = 10.sp, lineHeight = 13.sp)
+                    }
+                    Switch(
+                        checked = isIgRedirectEnabled,
+                        onCheckedChange = { checked ->
+                            isIgRedirectEnabled = checked
+                            AppBlockHelper.setIgRedirectToLifeOsEnabled(context, checked)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = Color(0xFFE1306C),
+                            uncheckedThumbColor = Color.Gray,
+                            uncheckedTrackColor = Color.DarkGray
+                        ),
+                        modifier = Modifier.testTag("ig_redirect_to_lifeos_switch")
+                    )
                 }
 
                 HorizontalDivider(color = Color.DarkGray.copy(alpha = 0.4f))

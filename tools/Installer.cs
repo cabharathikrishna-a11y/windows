@@ -26,12 +26,14 @@ namespace LifeOS.Installer
 
     class Program
     {
+        private const string DEFAULT_APP_URL = "https://ais-pre-wzrnxak24bqyxyrm3fnzxv-269590861741.asia-southeast1.run.app";
+
         static void Main(string[] args)
         {
-            Console.Title = "Life OS - Windows Application Installer & Setup";
+            Console.Title = "Life OS - Automatic Application Setup & Installer";
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("=========================================================================");
-            Console.WriteLine("       Life OS Windows Desktop - Automatic Web Installer & Setup        ");
+            Console.WriteLine("       Life OS Windows Desktop - Automatic Installer & Launcher          ");
             Console.WriteLine("=========================================================================");
             Console.ResetColor();
             Console.WriteLine();
@@ -48,7 +50,11 @@ namespace LifeOS.Installer
                     Directory.CreateDirectory(installDir);
                 }
 
-                // Strategy 0: Local Bundle Check (If installer is placed in same folder as zip/exe)
+                // Write App URL configuration file
+                string appUrlFile = Path.Combine(installDir, "app_url.txt");
+                File.WriteAllText(appUrlFile, DEFAULT_APP_URL);
+
+                // Strategy 0: Check if local zip bundle exists next to installer
                 string localZip = Path.Combine(currentExeDir, "Life_OS_Windows.zip");
                 if (!File.Exists(localZip)) localZip = Path.Combine(currentExeDir, "Life OS Windows.zip");
                 
@@ -57,16 +63,15 @@ namespace LifeOS.Installer
                 if (File.Exists(localZip))
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("[1/4] Local application bundle found! Extracting local package...");
+                    Console.WriteLine("[1/4] Local package bundle found! Preparing local package...");
                     Console.ResetColor();
-                    File.Copy(localZip, zipPath, true);
-                    downloaded = true;
+                    try { File.Copy(localZip, zipPath, true); downloaded = true; } catch { }
                 }
 
                 if (!downloaded)
                 {
                     Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine("[1/4] Connecting to GitHub Releases repository...");
+                    Console.WriteLine("[1/4] Connecting to GitHub server...");
                     Console.ResetColor();
                     
                     try
@@ -85,7 +90,7 @@ namespace LifeOS.Installer
                     };
 
                     Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine("[2/4] Downloading required Life OS application files from GitHub...");
+                    Console.WriteLine("[2/4] Downloading Life OS desktop bundle...");
                     Console.ResetColor();
 
                     foreach (string repo in reposToTry)
@@ -105,12 +110,18 @@ namespace LifeOS.Installer
                         {
                             try
                             {
-                                Console.WriteLine("Connecting to: " + url);
+                                Console.WriteLine("Source: " + url);
                                 using (CustomWebClient client = new CustomWebClient())
                                 {
                                     client.DownloadProgressChanged += delegate(object sender, DownloadProgressChangedEventArgs e)
                                     {
-                                        Console.Write(string.Format("\rProgress: {0}% ({1} MB / {2} MB)", e.ProgressPercentage, e.BytesReceived / 1024 / 1024, e.TotalBytesToReceive / 1024 / 1024));
+                                        int percent = e.ProgressPercentage;
+                                        int progressWidth = 28;
+                                        int filled = (percent * progressWidth) / 100;
+                                        string bar = new string('=', filled) + (filled < progressWidth ? ">" : "") + new string(' ', Math.Max(0, progressWidth - filled - 1));
+                                        double mbReceived = e.BytesReceived / 1024.0 / 1024.0;
+                                        double mbTotal = e.TotalBytesToReceive / 1024.0 / 1024.0;
+                                        Console.Write(string.Format("\rProgress: [{0}] {1}% ({2:F1} MB / {3:F1} MB) ", bar, percent, mbReceived, mbTotal));
                                     };
                                     
                                     client.DownloadFile(new Uri(url), zipPath);
@@ -140,7 +151,7 @@ namespace LifeOS.Installer
                                     if (endIdx != -1)
                                     {
                                         string apiDownloadUrl = json.Substring(idx, endIdx - idx);
-                                        Console.WriteLine("Found release asset via GitHub API: " + apiDownloadUrl);
+                                        Console.WriteLine("Source via API: " + apiDownloadUrl);
                                         client.DownloadFile(apiDownloadUrl, zipPath);
                                         if (File.Exists(zipPath) && new FileInfo(zipPath).Length > 1000)
                                         {
@@ -163,23 +174,30 @@ namespace LifeOS.Installer
                     Console.WriteLine("[3/4] Unpacking and configuring Life OS Desktop installation...");
                     Console.ResetColor();
 
-                    using (ZipArchive archive = ZipFile.OpenRead(zipPath))
+                    try
                     {
-                        foreach (ZipArchiveEntry entry in archive.Entries)
+                        using (ZipArchive archive = ZipFile.OpenRead(zipPath))
                         {
-                            string destinationPath = Path.Combine(installDir, entry.FullName);
-                            string dirPath = Path.GetDirectoryName(destinationPath);
-                            
-                            if (!string.IsNullOrEmpty(dirPath) && !Directory.Exists(dirPath))
+                            foreach (ZipArchiveEntry entry in archive.Entries)
                             {
-                                Directory.CreateDirectory(dirPath);
-                            }
-                            
-                            if (!string.IsNullOrEmpty(entry.Name))
-                            {
-                                entry.ExtractToFile(destinationPath, true);
+                                string destinationPath = Path.Combine(installDir, entry.FullName);
+                                string dirPath = Path.GetDirectoryName(destinationPath);
+                                
+                                if (!string.IsNullOrEmpty(dirPath) && !Directory.Exists(dirPath))
+                                {
+                                    Directory.CreateDirectory(dirPath);
+                                }
+                                
+                                if (!string.IsNullOrEmpty(entry.Name))
+                                {
+                                    entry.ExtractToFile(destinationPath, true);
+                                }
                             }
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Extract note: " + ex.Message);
                     }
 
                     try { File.Delete(zipPath); } catch { }
@@ -187,7 +205,7 @@ namespace LifeOS.Installer
                 else
                 {
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("[3/4] Life OS direct setup mode initialized...");
+                    Console.WriteLine("[3/4] Initializing Life OS Application...");
                     Console.ResetColor();
                 }
 
@@ -198,10 +216,6 @@ namespace LifeOS.Installer
                 {
                     try { File.Copy(launcherSource, targetExe, true); } catch { }
                 }
-
-                // Write App URL configuration file
-                string appUrlFile = Path.Combine(installDir, "app_url.txt");
-                File.WriteAllText(appUrlFile, "https://ais-pre-wzrnxak24bqyxyrm3fnzxv-269590861741.asia-southeast1.run.app");
 
                 // Create Desktop & Start Menu Shortcuts
                 Console.ForegroundColor = ConsoleColor.Yellow;
@@ -220,7 +234,7 @@ namespace LifeOS.Installer
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Desktop Shortcut Note: " + ex.Message);
+                    Console.WriteLine("Desktop Shortcut note: " + ex.Message);
                 }
 
                 // 2. Start Menu Programs Shortcut
@@ -237,40 +251,106 @@ namespace LifeOS.Installer
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Start Menu Shortcut Note: " + ex.Message);
+                    Console.WriteLine("Start Menu Shortcut note: " + ex.Message);
                 }
 
                 Console.WriteLine();
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("=========================================================================");
-                Console.WriteLine("       Installation Complete! Life OS is now ready on your PC.           ");
+                Console.WriteLine("       Setup Complete! Launching Life OS Desktop Application...          ");
                 Console.WriteLine("=========================================================================");
                 Console.ResetColor();
-                Console.WriteLine("Location: " + installDir);
-                Console.WriteLine("Launching application...");
 
                 // Launch Application
+                bool launched = false;
                 if (File.Exists(targetExe))
                 {
-                    Process.Start(new ProcessStartInfo(targetExe) { UseShellExecute = true, WorkingDirectory = installDir });
-                }
-                else if (File.Exists(finalExeToRun))
-                {
-                    Process.Start(new ProcessStartInfo(finalExeToRun) { UseShellExecute = true, WorkingDirectory = installDir });
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo(targetExe);
+                        psi.UseShellExecute = true;
+                        psi.WorkingDirectory = installDir;
+                        Process.Start(psi);
+                        launched = true;
+                    }
+                    catch { }
                 }
 
-                Thread.Sleep(2000);
+                if (!launched && File.Exists(finalExeToRun))
+                {
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo(finalExeToRun);
+                        psi.UseShellExecute = true;
+                        psi.WorkingDirectory = installDir;
+                        Process.Start(psi);
+                        launched = true;
+                    }
+                    catch { }
+                }
+
+                // Guaranteed Fallback Launcher
+                if (!launched)
+                {
+                    LaunchDirectBrowserAppMode(DEFAULT_APP_URL);
+                }
+
+                Thread.Sleep(1500);
             }
             catch (Exception ex)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine();
                 string errMsg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
-                Console.WriteLine("Installation Note: " + errMsg);
+                Console.WriteLine("Setup note: " + errMsg);
                 Console.ResetColor();
-                Console.WriteLine("Press any key to exit...");
-                Console.ReadKey();
+
+                // Even on error, attempt to open Life OS app window!
+                LaunchDirectBrowserAppMode(DEFAULT_APP_URL);
+                Thread.Sleep(2000);
             }
+        }
+
+        private static void LaunchDirectBrowserAppMode(string appUrl)
+        {
+            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            string localAppDataDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+            string[] candidateBrowsers = new string[]
+            {
+                Path.Combine(programFilesX86, @"Microsoft\Edge\Application\msedge.exe"),
+                Path.Combine(programFiles, @"Microsoft\Edge\Application\msedge.exe"),
+                @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                Path.Combine(programFiles, @"Google\Chrome\Application\chrome.exe"),
+                Path.Combine(programFilesX86, @"Google\Chrome\Application\chrome.exe"),
+                Path.Combine(localAppDataDir, @"Google\Chrome\Application\chrome.exe"),
+                Path.Combine(localAppDataDir, @"Microsoft\Edge\Application\msedge.exe")
+            };
+
+            foreach (string browserPath in candidateBrowsers)
+            {
+                if (!string.IsNullOrEmpty(browserPath) && File.Exists(browserPath))
+                {
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = browserPath;
+                        psi.Arguments = "--app=" + appUrl;
+                        psi.UseShellExecute = false;
+                        Process.Start(psi);
+                        return;
+                    }
+                    catch { }
+                }
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(appUrl) { UseShellExecute = true });
+            }
+            catch { }
         }
 
         private static void CreateShortcut(string shortcutPath, string targetPath, string workingDir, string description)

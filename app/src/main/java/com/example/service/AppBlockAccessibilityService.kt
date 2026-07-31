@@ -21,6 +21,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
 
     private var lastBlockTime: Long = 0L
     private var consecutiveBlockCount = 0
+    private var lastIgRedirectTime: Long = 0L
 
     private fun applyBlockAction(appName: String, featureName: String) {
         val now = System.currentTimeMillis()
@@ -46,38 +47,68 @@ class AppBlockAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        // Focus Guard has been disabled for now
-        return
         try {
             val packageName = event.packageName?.toString() ?: return
-            
-            // 1. Check general app blocking first
+
+            // 1. Check Instagram auto-redirect to Life OS feature first
+            if (packageName == "com.instagram.android") {
+                if (checkAndRedirectInstagramToLifeOs()) return
+            }
+
+            // 2. Check general app blocking
             if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
                 AppBlockHelper.checkForegroundAppAndBlockIfNeeded(applicationContext, packageName)
             }
 
-            // 2. Fine-grained Instagram blocking logic
+            // 3. Fine-grained Instagram blocking logic
             if (packageName == "com.instagram.android") {
                 handleInstagramBlocking(event)
             }
 
-            // 3. Fine-grained YouTube blocking logic
+            // 4. Fine-grained YouTube blocking logic
             if (packageName == "com.google.android.youtube") {
                 handleYoutubeBlocking(event)
             }
 
-            // 4. Fine-grained Snapchat blocking logic
+            // 5. Fine-grained Snapchat blocking logic
             if (packageName == "com.snapchat.android") {
                 handleSnapchatBlocking(event)
             }
 
-            // 5. Fine-grained Facebook blocking logic
+            // 6. Fine-grained Facebook blocking logic
             if (packageName == "com.facebook.katana" || packageName == "com.facebook.lite") {
                 handleFacebookBlocking(event)
             }
         } catch (e: Exception) {
             Log.e("AppBlocker", "Defensive catch: Ignored unhandled exception in onAccessibilityEvent", e)
         }
+    }
+
+    private fun checkAndRedirectInstagramToLifeOs(): Boolean {
+        val context = applicationContext
+        if (AppBlockHelper.isIgRedirectToLifeOsEnabled(context)) {
+            val now = System.currentTimeMillis()
+            if (now - lastIgRedirectTime > 2500) {
+                lastIgRedirectTime = now
+                Log.w("AppBlocker", "Official Instagram app opened! Intercepting and launching Life OS AntiGram Instagram...")
+                showToast("Diverting Official Instagram to Life OS AntiGram... 📱✨")
+
+                // 1. Immediately send HOME action to close official Instagram app
+                performGlobalAction(GLOBAL_ACTION_HOME)
+
+                // 2. Immediately launch Life OS AntiGram Instagram screen
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                    putExtra("OPEN_INSTAGRAM_WEB_APP", true)
+                    putExtra("NAVIGATE_TO", "INSTAGRAM_WEB_APP")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                if (launchIntent != null) {
+                    context.startActivity(launchIntent)
+                }
+                return true
+            }
+        }
+        return false
     }
 
     private fun handleInstagramBlocking(event: AccessibilityEvent) {
