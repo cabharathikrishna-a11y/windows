@@ -111,6 +111,21 @@ jobs:
             Write-Host "jpackage build note: $($_.Exception.Message)"
         }
 
+        # Build C# Web Downloader & Installer EXE (Life_OS_Installer.exe)
+        try {
+            $cscPath = Get-ChildItem -Path "C:\Windows\Microsoft.NET\Framework64", "C:\Program Files" -Filter "csc.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cscPath) {
+                Write-Host "Compiling Windows Web Installer EXE with $($cscPath.FullName)..."
+                & $cscPath.FullName /target:exe /out:"build/windows_dist/Life_OS_Installer.exe" /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll tools/Installer.cs
+                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "build/windows_dist/Life_OS_Setup.exe" -Force
+                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Installer.exe" -Force
+                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life_OS_Setup.exe" -Force
+                Copy-Item "build/windows_dist/Life_OS_Installer.exe" -Destination "Life OS Setup.exe" -Force
+            }
+        } catch {
+            Write-Host "C# Installer Compilation Note: $($_.Exception.Message)"
+        }
+
         # Launcher script supporting direct EXE execution or fallback JRE execution
         Set-Content -Path "build/windows_dist/Life_OS_Windows_Launcher.cmd" -Value "@echo off`r`necho Starting Life OS for Windows...`r`nif exist `"%~dp0Life_OS.exe`" (`r`n    start `"`" `"%~dp0Life_OS.exe`" %*`r`n) else (`r`n    where javaw >nul 2>nul`r`n    if %errorlevel% equ 0 (`r`n        start /b `"`" javaw -jar `"%~dp0Life_OS_Desktop.jar`" %*`r`n    ) else (`r`n        where java >nul 2>nul`r`n        if %errorlevel% equ 0 (`r`n            start /b `"`" java -jar `"%~dp0Life_OS_Desktop.jar`" %*`r`n        ) else (`r`n            echo Java is not installed or not found in PATH.`r`n            echo Please install Java 17+ or run Life_OS.exe directly.`r`n            pause`r`n        )`r`n)`r`n)`r`n"
 
@@ -131,6 +146,9 @@ jobs:
           Life OS Windows.zip
           Life_OS.exe
           Life OS.exe
+          Life_OS_Installer.exe
+          Life_OS_Setup.exe
+          Life OS Setup.exe
         if-no-files-found: ignore
 
   publish_release:
@@ -158,8 +176,9 @@ jobs:
           Automated Windows Desktop build compiled successfully via GitHub Actions.
           
           📦 **Windows Release Assets**:
-          - `Life_OS.exe` (Standalone Windows Executable - No Java Required)
-          - `Life_OS_Windows.zip` (Complete Desktop Bundle)
+          - `Life_OS_Installer.exe` / `Life_OS_Setup.exe` (Web Downloader & Installer - Automatic setup from GitHub)
+          - `Life_OS.exe` (Standalone Windows Executable)
+          - `Life_OS_Windows.zip` (Complete Desktop Package Bundle)
           
           Tracking Identifier: Build #${{ github.run_number }} (Version Code: ${{ needs.build_windows.outputs.version_code }}, Version Name: ${{ needs.build_windows.outputs.version_name }})
         files: |
