@@ -76,12 +76,11 @@ jobs:
         }
         New-Item -ItemType Directory -Force -Path "build/windows_dist"
         if (Test-Path "desktop/build/compose/binaries/main/exe") {
-            Copy-Item "desktop/build/compose/binaries/main/exe/*" -Destination "build/windows_dist/" -Recurse
+            Copy-Item "desktop/build/compose/binaries/main/exe/*" -Destination "build/windows_dist/" -Recurse -ErrorAction SilentlyContinue
         }
         if (Test-Path "desktop/build/compose/binaries/main/zip") {
-            Copy-Item "desktop/build/compose/binaries/main/zip/*" -Destination "build/windows_dist/" -Recurse
+            Copy-Item "desktop/build/compose/binaries/main/zip/*" -Destination "build/windows_dist/" -Recurse -ErrorAction SilentlyContinue
         }
-        Compress-Archive -Path ".*", "app", "gradle*", "build.gradle.kts", "settings.gradle.kts" -DestinationPath "build/windows_dist/Life_OS_Windows_Source_Package.zip" -Force
         Set-Content -Path "build/windows_dist/Life_OS_Windows_Launcher.cmd" -Value "@echo off`r`necho Starting Life OS for Windows...`r`nstart /b javaw -jar Life_OS_Desktop.jar %*`r`n"
         Compress-Archive -Path "build/windows_dist/*" -DestinationPath "Life_OS_Windows.zip" -Force
         Copy-Item "Life_OS_Windows.zip" "Life OS Windows.zip"
